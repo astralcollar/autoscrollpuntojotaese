@@ -45,6 +45,12 @@
         nextVideo.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
         unmuteVideo(nextVideo);
+        // Force play to ensure it doesn't get stuck on first frame
+        try {
+            nextVideo.play();
+        } catch (e) {
+            console.log("Autoplay blocked, user interaction might be needed:", e);
+        }
         lastActiveVideo = nextVideo; // Update query
     }
 
@@ -56,11 +62,17 @@
         unmuteVideo(video);
 
         video.addEventListener('ended', (e) => {
+            e.target.classList.remove('pip-active'); // Un-focus when ended
             navigateNext(e.target);
         });
 
         // Also update lastActiveVideo on play to track manual scrolls
         video.addEventListener('play', (e) => {
+            // Remove focus from all other videos to prevent overlap
+            const root = pipWindow ? pipWindow.document : document;
+            root.querySelectorAll('video.pip-active').forEach(v => v.classList.remove('pip-active'));
+
+            e.target.classList.add('pip-active'); // Focus current
             lastActiveVideo = e.target;
         });
 
@@ -94,6 +106,11 @@
                 unmuteVideo(v);
             });
         });
+
+        // Anti-Pause: Ensure active video plays even in background
+        if (lastActiveVideo && lastActiveVideo.paused) {
+            lastActiveVideo.play().catch(() => { });
+        }
     }, 1000);
 
     // --- Restoration Logic ---
@@ -155,8 +172,8 @@
             // Use Mobile Aspect Ratio (9:16 approx) to hide sidebars natively
             // 400px width forces most responsive sites to hide comments/sidebars
             pipWindow = await window.documentPictureInPicture.requestWindow({
-                width: 380,
-                height: 750
+                width: 250,
+                height: 450
             });
 
             // Copy Styles
@@ -180,13 +197,43 @@
                 // --- Framing Fixes: Inject custom CSS for PiP ---
                 const framingStyle = document.createElement('style');
                 framingStyle.textContent = `
-                    /* Hide Scrollbars */
-                    body::-webkit-scrollbar { display: none; }
-                    /* Try to declutter common sidebars if they exist */
-                    aside, .sidebar, [role="complementary"] { display: none !important; }
-                    /* Ensure video fits height */
-                    video { max-height: 100vh; }
-                    body { margin: 0; overflow-x: hidden; background: #000; }
+                    /* Lock Body and HTML */
+                    html, body {
+                        margin: 0 !important;
+                        padding: 0 !important;
+                        width: 100vw !important;
+                        height: 100vh !important;
+                        overflow: hidden !important;
+                        background: #000 !important;
+                        display: flex !important;
+                        align-items: center !important;
+                        justify-content: center !important;
+                    }
+
+                    /* Hide UI Clutter */
+                    aside, .sidebar, [role="complementary"],
+                    button, [role="button"], [aria-label], 
+                    div[class*="Overlay"],
+                    a[href*="/"],
+                    svg,
+                    img[alt],
+                    h1, h2, nav 
+                    { display: none !important; }
+
+                    /* Active Video State - The one playing */
+                    video.pip-active { 
+                        position: fixed !important;
+                        top: 0 !important;
+                        left: 0 !important;
+                        width: 100% !important;
+                        height: 100% !important;
+                        object-fit: contain !important;
+                        z-index: 2147483647 !important;
+                        display: block !important;
+                        opacity: 1 !important;
+                        visibility: visible !important;
+                        background: #000 !important;
+                    }
                 `;
                 pipWindow.document.head.appendChild(framingStyle);
 
@@ -202,8 +249,10 @@
             const allVideos = Array.from(pipWindow.document.querySelectorAll('video'));
             // Find one that is playing or visible? Use lastKnown
             if (lastActiveVideo) {
+                lastActiveVideo.classList.add('pip-active'); // Force active class initially
                 lastActiveVideo.scrollIntoView({ block: 'center', behavior: 'instant' });
             } else if (allVideos.length > 0) {
+                allVideos[0].classList.add('pip-active');
                 allVideos[0].scrollIntoView({ block: 'center', behavior: 'instant' });
             }
 
