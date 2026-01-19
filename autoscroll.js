@@ -13,6 +13,33 @@
 (function () {
     console.log("Auto-Advance Script v9 (Polished) Started...");
 
+    // --- Focus Spoofer (Always Active) ---
+    // Tricks the browser/site into thinking the tab is always focused and visible
+    function spoofVisibility() {
+        try {
+            Object.defineProperty(document, 'hidden', { get: () => false, configurable: true });
+            Object.defineProperty(document, 'visibilityState', { get: () => 'visible', configurable: true });
+            Object.defineProperty(document, 'hasFocus', { value: () => true, configurable: true });
+
+            // Trap events that signal loss of focus
+            const blockEvents = ['visibilitychange', 'webkitvisibilitychange', 'blur', 'mozvisibilitychange', 'msvisibilitychange'];
+            blockEvents.forEach(evt => {
+                window.addEventListener(evt, (e) => {
+                    e.stopImmediatePropagation();
+                    e.stopPropagation();
+                    // console.log(`Blocked ${evt} to maintain focus.`);
+                }, true);
+                document.addEventListener(evt, (e) => {
+                    e.stopImmediatePropagation();
+                    e.stopPropagation();
+                }, true);
+            });
+        } catch (e) {
+            console.warn("Focus spoofing limited by browser:", e);
+        }
+    }
+    spoofVisibility();
+
     // --- State ---
     const attachedVideos = new WeakSet();
     let pipWindow = null;
@@ -127,8 +154,8 @@
             document.adoptNode(mainContent);
 
             if (placeholder && placeholder.parentNode) {
-                placeholder.parentNode.insertBefore(mainContent, placeholder);
-                placeholder.remove();
+                // If placeholder is our custom div, replace it
+                placeholder.replaceWith(mainContent);
             } else {
                 document.body.append(mainContent);
             }
@@ -197,36 +224,36 @@
                 // --- Framing Fixes: Inject custom CSS for PiP ---
                 const framingStyle = document.createElement('style');
                 framingStyle.textContent = `
-                    /* Lock Body and HTML */
-                    html, body {
-                        margin: 0 !important;
-                        padding: 0 !important;
-                        width: 100vw !important;
-                        height: 100vh !important;
-                        overflow: hidden !important;
-                        background: #000 !important;
-                        display: flex !important;
-                        align-items: center !important;
-                        justify-content: center !important;
-                    }
+                        /* Lock Body and HTML */
+                        html, body {
+                            margin: 0 !important;
+                            padding: 0 !important;
+                            width: 100vw !important;
+                            height: 100vh !important;
+                            overflow: hidden !important;
+                            background: #000 !important;
+                            display: flex !important;
+                            align-items: center !important;
+                            justify-content: center !important;
+                        }
 
-                    /* Hide UI Clutter */
-                    aside, .sidebar, [role="complementary"],
-                    button, [role="button"], [aria-label], 
-                    div[class*="Overlay"],
-                    a[href*="/"],
-                    svg,
-                    img[alt],
-                    h1, h2, nav 
-                    { display: none !important; }
+                        /* Hide UI Clutter */
+                        aside, .sidebar, [role="complementary"],
+                        button, [role="button"], [aria-label], 
+                        div[class*="Overlay"],
+                        a[href*="/"],
+                        svg,
+                        img[alt],
+                        h1, h2, nav 
+                        { display: none !important; }
 
-                    /* Active Video State - The one playing */
+                        /* Active Video State - The one playing */
                     video.pip-active { 
                         position: fixed !important;
                         top: 0 !important;
                         left: 0 !important;
                         width: 100% !important;
-                        height: 100% !important;
+                        height: calc(100vh - 50px) !important; /* Leave space for button */
                         object-fit: contain !important;
                         z-index: 2147483647 !important;
                         display: block !important;
@@ -234,16 +261,119 @@
                         visibility: visible !important;
                         background: #000 !important;
                     }
+
+                    /* Smaller Skip Button below video */
+                    #pip-skip-btn {
+                        display: block !important;
+                        position: fixed !important;
+                        bottom: 10px !important;
+                        left: 50% !important;
+                        transform: translateX(-50%) !important;
+                        width: auto !important;
+                        padding: 8px 20px !important;
+                        font-size: 14px !important;
+                        background: rgba(255, 255, 255, 0.2) !important;
+                        color: white !important;
+                        border: 1px solid rgba(255, 255, 255, 0.5) !important;
+                        border-radius: 20px !important;
+                        z-index: 2147483648 !important;
+                        cursor: pointer !important;
+                        backdrop-filter: blur(4px) !important;
+                        font-weight: bold !important;
+                        text-transform: uppercase !important;
+                        box-shadow: 0 2px 5px rgba(0,0,0,0.5) !important;
+                    }
+                    #pip-skip-btn:hover {
+                        background: rgba(255, 255, 255, 0.4) !important;
+                        transform: translateX(-50%) scale(1.05) !important;
+                    }
                 `;
                 pipWindow.document.head.appendChild(framingStyle);
 
             }, 0);
 
             mainContent = document.querySelector('main') || document.body;
-            placeholder = document.createComment("pip-placeholder-marker");
+
+            // Create Visible Placeholder
+            placeholder = document.createElement("div");
+            placeholder.style.cssText = `
+                height: 100vh;
+                width: 100vw;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                background: #111;
+                color: #fff;
+                font-family: system-ui, sans-serif;
+                z-index: 9999;
+            `;
+            placeholder.innerHTML = `
+                <h2 style="margin-bottom: 20px;">Reels Playing in PiP</h2>
+                <button id="restore-btn" style="
+                    padding: 10px 20px; 
+                    font-size: 16px; 
+                    cursor: pointer; 
+                    background: #fff; 
+                    color: #000; 
+                    border: none; 
+                    border-radius: 5px;
+                    font-weight: bold;
+                ">Restore View</button>
+            `;
+            placeholder.querySelector('#restore-btn').onclick = () => {
+                if (pipWindow) pipWindow.close();
+            };
+
             mainContent.parentNode.insertBefore(placeholder, mainContent);
 
             pipWindow.document.body.append(mainContent);
+
+            // Add Skip Button
+            const skipBtn = document.createElement('button');
+            skipBtn.id = 'pip-skip-btn';
+            skipBtn.innerText = 'Skip ⏭️';
+            skipBtn.onclick = (e) => {
+                // Prevent bubbling to Instagram's own handlers
+                e.stopImmediatePropagation();
+                e.preventDefault();
+
+                console.log("Skip Intiated...");
+
+                // Strategy 1: Known Last Active
+                let current = lastActiveVideo;
+
+                // Strategy 2: Find the one with our active class
+                if (!current || !current.isConnected) {
+                    current = pipWindow.document.querySelector('video.pip-active');
+                }
+
+                // Strategy 3: Find any playing video
+                if (!current) {
+                    const videos = Array.from(pipWindow.document.querySelectorAll('video'));
+                    current = videos.find(v => !v.paused && v.style.display !== 'none');
+                }
+
+                // Strategy 4: Just take the first one if desperate
+                if (!current && pipWindow.document.querySelectorAll('video').length > 0) {
+                    current = pipWindow.document.querySelectorAll('video')[0];
+                }
+
+                if (current) {
+                    console.log("Skipping from video:", current);
+
+                    // Critical: Clean up state
+                    current.classList.remove('pip-active');
+                    current.pause();
+
+                    navigateNext(current);
+                } else {
+                    console.error("AutoScroll: No video found to skip!");
+                    // Emergency fallback: Just scroll the window
+                    pipWindow.scrollBy({ top: 300, behavior: 'smooth' });
+                }
+            };
+            pipWindow.document.body.append(skipBtn);
 
             // Re-center on the current video immediately in PiP
             const allVideos = Array.from(pipWindow.document.querySelectorAll('video'));
