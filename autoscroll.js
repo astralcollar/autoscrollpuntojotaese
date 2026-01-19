@@ -238,16 +238,19 @@
                         }
 
                         /* Hide UI Clutter */
-                        aside, .sidebar, [role="complementary"],
-                        button, [role="button"], [aria-label], 
-                        div[class*="Overlay"],
-                        a[href*="/"],
-                        svg,
-                        img[alt],
-                        h1, h2, nav 
-                        { display: none !important; }
+                    aside, .sidebar, [role="complementary"],
+                    button, [role="button"], [aria-label], 
+                    div[class*="Overlay"],
+                    a[href*="/"],
+                    svg,
+                    img[alt],
+                    h1, h2, nav,
+                    header, footer, 
+                    [role="banner"], [role="navigation"], 
+                    [class*="Nav"], [class*="Menu"], [class*="Bar"]
+                    { display: none !important; }
 
-                        /* Active Video State - The one playing */
+                    /* Active Video State - The one playing */
                     video.pip-active { 
                         position: fixed !important;
                         top: 0 !important;
